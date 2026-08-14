@@ -1,12 +1,6 @@
----
-name: Kill Switch
-slug: agent-kill-switch
-kind: plugin
-sdkPackage: "@paperclipai/plugin-sdk"
-installTarget: standalone
----
+# 📎 Agent Kill Switch
 
-# Kill Switch
+...for [paperclip](https://paperclip.ing)
 
 A big red emergency stop for the whole company. One action immediately halts
 every agent, pauses in-flight work, and blocks any new task from starting. The
