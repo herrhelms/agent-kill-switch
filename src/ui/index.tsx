@@ -482,6 +482,7 @@ function ResumePanel(props: {
   onResumed: () => void;
   onAnnotated: () => void;
 }): JSX.Element {
+  const { companyId } = props;
   const resume = usePluginAction("resume");
   const annotate = usePluginAction("annotate");
   const toast = usePluginToast();
