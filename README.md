@@ -22,8 +22,8 @@ human-in-the-loop is mandatory to un-halt, never to halt.
   No reason is required. If the company is already halted, tripping is a no-op.
 
 - **Stay halted.** While tripped, the plugin actively keeps the company frozen:
-  - lifecycle events (`issue.created`, `issue.updated`, `task.created`) that
-    look like a *new start* re-assert the host pause (defense in depth) and log a
+  - lifecycle events (`issue.checked_out`, `issue.created`) that look like a
+    *new start* re-assert the host pause (defense in depth) and log a
     `reassert` row;
   - a watchdog job re-pauses any agent that drifted back to running;
   - a `status` API route lets agents cooperatively refuse checkout in their
@@ -54,50 +54,22 @@ tokens — intentionally, unmistakably red, but still theme-correct and dark-mod
 
 ---
 
-## ⚑ Two live-SDK unknowns to verify before install
-
-This plugin depends on two host surfaces whose exact names must be reconciled
-against the **live SDK** at render/install time. They are flagged here loudly
-because the plugin's core promise (a *true* stop) rides on the first one.
-
-1. **The real agent-pause capability / endpoint.** The brief assumes
-   `agents.write` performs a host-enforced pause/resume of all company agents.
-   The live SDK may instead expose this as a `companies.write` / company-pause
-   surface. **Verify the exact capability and endpoint** before relying on the
-   host pause.
-
-2. **Widget + sidebar slot registration capability names.** The page slot uses
-   `ui.page.register`. The dashboard-widget and sidebar slots may require
-   distinct registration capabilities (e.g. `ui.dashboardWidget.register`,
-   `ui.sidebar.register`). **Verify the exact slot registration cap names**
-   against the live SDK.
-
-### If the host has NO pause surface at all — cooperative-only degradation
-
-If the runtime turns out to have no host-enforced agent-pause surface, this
-plugin **degrades to cooperative-only** and you must know it:
-
-- The **HALT flag** in plugin state is still set on trip and cleared on resume.
-- The **`status` API route** still reports `{ tripped }`.
-- Agents must honor the flag in their **HEARTBEAT contract** — checking the
-  status route and refusing checkout while `tripped=true`.
-
-In cooperative-only mode the switch is a *contract*, not an enforced kill: an
-agent that ignores its HEARTBEAT will not be stopped. The event re-assert and
-watchdog job become no-ops with nothing to enforce. **Do not present this plugin
-as a hard kill unless the host pause surface (unknown #1) is confirmed live.**
-
----
-
 ## Enforcement model
+
+The stop is a **real, host-enforced kill**, verified end-to-end against a live
+Paperclip host (v2026.707.0): tripping calls `ctx.agents.pause` on every agent
+and the host transitions each to `paused`; resume calls `ctx.agents.resume`.
 
 Three layers, so a single failure does not un-freeze the company:
 
-1. **Host pause** (the true stop) — pauses every agent via the host.
-2. **HALT flag in plugin state**, exposed via the `status` route — agents honor
-   it cooperatively in HEARTBEAT (the fallback if layer 1 is unavailable).
-3. **Self-healing while tripped** — lifecycle-event re-assert plus a watchdog
-   cron re-pause anything that drifts back to running.
+1. **Host pause** (the true stop) — pauses every non-terminated agent in the
+   company via `ctx.agents.pause`. This is the enforced kill, not a contract.
+2. **HALT flag in company-scoped plugin state**, exposed via the `status` route
+   — agents can additionally honor it in HEARTBEAT and refuse checkout while
+   `tripped=true`. Belt-and-suspenders on top of layer 1, not a substitute.
+3. **Self-healing while tripped** — new-work lifecycle events re-assert the
+   pause, and a watchdog cron sweeps every company and re-pauses anything that
+   has drifted back to running.
 
 Resume reverses layers 1 and 2 together, only via the board resume action with a
 required note.
@@ -112,12 +84,13 @@ fail silently if under-declared):
 - `plugin.state.read`, `plugin.state.write` — HALT flag.
 - `database.namespace.migrate`, `database.namespace.read`, `database.namespace.write` — audit log.
 - `agents.read` — live agent list + paused counts.
-- `agents.write` — ⚑ host pause/resume (see unknown #1).
-- `events.subscribe` — issue/task lifecycle re-assert.
+- `agents.pause`, `agents.resume` — host-enforced pause/resume (the true kill).
+- `events.subscribe` — issue lifecycle re-assert.
 - `jobs.schedule` — watchdog cron.
 - `api.routes.register` — `status` and `trip` HTTP routes.
-- `companies.read` — company context.
-- `ui.page.register` — ⚑ page slot (widget/sidebar cap names: see unknown #2).
+- `companies.read` — company context (also used by the watchdog sweep).
+- `ui.page.register`, `ui.dashboardWidget.register`, `ui.sidebar.register` — the
+  page, widget, and sidebar slots.
 
 No `ctx.assets`. No host UI component-kit imports.
 
@@ -128,11 +101,13 @@ No `ctx.assets`. No host UI component-kit imports.
 Mounted under `/api/plugins/:pluginId/api/<path>`.
 
 - **`status`** — `GET`, auth `board-or-agent`, `companyResolution { from: "query", key: "companyId" }`.
-  Returns `{ tripped }` so agent HEARTBEAT checks can cooperatively refuse
-  checkout even if the host pause is unavailable.
-- **`trip`** — `POST`, auth `webhook`, `companyResolution { from: "query", key: "companyId" }`.
-  Lets an external monitor (runaway-cost / anomaly detector) trip the switch —
-  same effect as the in-app trip action.
+  Returns `{ tripped, since }` so agent HEARTBEAT checks can cooperatively refuse
+  checkout as an extra layer on top of the host pause.
+- **`trip`** — `POST`, auth `board-or-agent`, `companyResolution { from: "query", key: "companyId" }`.
+  Lets an internal monitor (runaway-cost / anomaly detector) trip the switch —
+  same effect as the in-app trip action. (`webhook` auth is intentionally not
+  used: it requires a host-configured signature verifier a standard install
+  lacks, so a webhook-auth route would never fire.)
 
 ---
 
@@ -167,7 +142,7 @@ Newest-first, this is the incident audit trail shown on the page.
 Production install (npm is the deployable artifact):
 
 ```
-pnpm add paperclip-plugin-agent-kill-switch
+pnpm add @herrhelms/agent-kill-switch
 ```
 
 Development install from an absolute local path (dev-only; not a production
@@ -201,6 +176,9 @@ pnpm build
 - **Resume always asks for a reason.** The resolution note is mandatory and the
   Resume button stays disabled until it is non-empty.
 - **Only the board can resume.** The widget and sidebar Resume affordances route
-  to the page's resume form; the action itself rejects non-board actors.
-- **Verify the two ⚑ unknowns before trusting this as a hard kill.** Until the
-  host pause surface is confirmed, treat the switch as cooperative-only.
+  to the page's resume form; the action itself rejects non-board actors (a board
+  actor is `context.actor.type === "user"`).
+- **The namespace hash is derived from the plugin id.** The audit table lives in
+  schema `plugin_agent_kill_switch_ef032069aa`, hardcoded in the migration
+  because migrations run as literal SQL with no template substitution. If the
+  plugin `id` ever changes, recompute the schema and update the migration.

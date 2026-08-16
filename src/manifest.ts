@@ -49,13 +49,11 @@ const manifest: PaperclipPluginManifestV1 = {
     // agents.read — live agent list (id, name, paused) for the status counts
     // and the incident-console table. Agent display name is agent.name.
     "agents.read",
-    // agents.write ⚑ — host-enforced pause/resume of every company agent. This
-    // is the true kill. VERIFY the exact capability/endpoint against the live
-    // SDK before shipping — it may instead be a companies.write / company-pause
-    // surface. If NO host pause surface exists at all, drop this capability,
-    // fall back to cooperative-only (HALT flag + status route + heartbeat
-    // contract) and document that loudly in the README.
-    "agents.write",
+    // agents.pause / agents.resume — host-enforced pause/resume of every company
+    // agent. This is the true kill: the worker calls ctx.agents.pause on trip
+    // and ctx.agents.resume on board-approved resume.
+    "agents.pause",
+    "agents.resume",
     // events.subscribe — issue/task lifecycle. While tripped, any new
     // transition into in-progress is a new-start attempt: re-assert the host
     // pause and append a `reassert` audit row. (Read PluginEvent fields from
@@ -112,12 +110,16 @@ const manifest: PaperclipPluginManifestV1 = {
       companyResolution: { from: "query", key: "companyId" },
     },
     {
-      // Lets an external monitor (runaway-cost / anomaly detector) trip the
-      // switch — same effect as the in-UI `trip` action.
+      // Lets an internal monitor (runaway-cost / anomaly detector) trip the
+      // switch programmatically — same effect as the in-UI `trip` action.
+      // Uses board-or-agent auth: webhook-auth routes require a host-configured
+      // signature verifier that a standard install does not provide, so they
+      // never fire. board-or-agent works out of the box for an authenticated
+      // monitor agent or a board operator.
       routeKey: "trip",
       method: "POST",
       path: "/trip",
-      auth: "webhook",
+      auth: "board-or-agent",
       capability: "api.routes.register",
       companyResolution: { from: "query", key: "companyId" },
     },

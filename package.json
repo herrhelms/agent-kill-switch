@@ -4,15 +4,15 @@
   "publishConfig": {
     "access": "public"
   },
-  "description": "A big red emergency kill-switch for a whole Paperclip company. One action instantly halts every agent, pauses in-flight work, and blocks new tasks from starting. The company stays frozen until the board explicitly resumes with a required resolution note.",
+  "description": "A Paperclip plugin providing a big red emergency kill-switch for a whole Paperclip company. One action instantly halts every agent, pauses in-flight work, and blocks new tasks from starting. The company stays frozen until the board explicitly resumes with a required resolution note.",
   "author": "@herrhelms",
-  "homepage": "https://github.com/herrhelms/paperclip-agent-kill-switch#readme",
+  "homepage": "https://github.com/herrhelms/agent-kill-switch#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/herrhelms/paperclip-agent-kill-switch.git"
+    "url": "git+https://github.com/herrhelms/agent-kill-switch.git"
   },
   "bugs": {
-    "url": "https://github.com/herrhelms/paperclip-agent-kill-switch/issues"
+    "url": "https://github.com/herrhelms/agent-kill-switch/issues"
   },
   "type": "module",
   "main": "dist/worker.js",
